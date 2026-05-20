@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information related to a user's account.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique user authentication ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Project": {
+      "title": "Research Project",
+      "description": "Holds the conversation history, sources, and queries for a unique user research project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The custom project ID" },
+        "userId": { "type": "string", "description": "The user owning this research project" },
+        "topic": { "type": "string", "description": "Main briefing topic" },
+        "depth": { "type": "string", "enum": ["quick", "deep"], "description": "Whether quick indexing or deep logical exploration" },
+        "messages": { "type": "array", "description": "Historical message logs between user and Lilbed AI" },
+        "createdAt": { "type": "string", "description": "ISO timestamp or formatted date string" }
+      },
+      "required": ["id", "userId", "topic", "depth", "messages", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile isolation containing personal identification info."
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User research reports, isolated dynamically via owner userId mapping."
+    }
+  }
+}

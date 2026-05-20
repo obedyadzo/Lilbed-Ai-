@@ -1,0 +1,6 @@
+{
+  "name": "Lilbed AI",
+  "description": "An advanced AI research assistant that searches the web globally to provide detailed answers and verified sources.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
