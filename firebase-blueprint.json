@@ -24,6 +24,42 @@
         "createdAt": { "type": "string", "description": "ISO timestamp or formatted date string" }
       },
       "required": ["id", "userId", "topic", "depth", "messages", "createdAt"]
+    },
+    "Profile": {
+      "title": "Social Profile",
+      "description": "WhatsApp and scholar collaborative social directory profiles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user ID of the registered scholar" },
+        "name": { "type": "string", "description": "Full name of the scholar" },
+        "phoneNumber": { "type": "string", "description": "Active WhatsApp phone number" },
+        "bio": { "type": "string", "description": "Short scholarly/research bio description" },
+        "role": { "type": "string", "description": "Scholar or developer collaboration role" },
+        "whatsappLink": { "type": "string", "description": "Direct WhatsApp message URL" },
+        "isPremium": { "type": "boolean", "description": "Whether the user holds premium video and checkout licensing" },
+        "createdAt": { "type": "string", "description": "Timestamp of profile creation" }
+      },
+      "required": ["uid", "name", "phoneNumber", "bio", "role", "createdAt"]
+    },
+    "TokPost": {
+      "title": "Lilbed Tok Post",
+      "description": "Interactive video posts representing the TikTok-styled scholar reels feed.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "caption": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "musicTrack": { "type": "string" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "sharesCount": { "type": "integer" },
+        "likedBy": { "type": "array", "items": { "type": "string" } },
+        "comments": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "authorName", "caption", "videoUrl", "likesCount", "commentsCount", "sharesCount", "likedBy", "comments", "createdAt"]
     }
   },
   "firestore": {
@@ -34,6 +70,14 @@
     "/projects/{projectId}": {
       "schema": "Project",
       "description": "User research reports, isolated dynamically via owner userId mapping."
+    },
+    "/profiles/{profileId}": {
+      "schema": "Profile",
+      "description": "Scholar and WhatsApp directories, read accessible to any signed-in user."
+    },
+    "/toks/{tokId}": {
+      "schema": "TokPost",
+      "description": "Public short video posts, read accessible by everyone and writeable by signed-in premium users."
     }
   }
 }

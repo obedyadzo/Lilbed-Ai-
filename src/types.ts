@@ -2,6 +2,7 @@ export interface Source {
   id: number;
   title: string;
   url: string;
+  summary?: string;
 }
 
 export interface Message {
@@ -21,25 +22,42 @@ export interface ResearchProject {
   createdAt: string;
 }
 
-// Canva Element definition for whiteboard layout builder
-export interface CanvaElement {
+// Published research paper inside Lilbed world database 
+export interface PublishedPaper {
   id: string;
-  type: 'note' | 'text' | 'shape' | 'connector';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  color: string;
-  content: string;
-  shapeType?: 'rectangle' | 'circle' | 'triangle' | 'arrow';
+  userId: string;
+  authorName: string;
+  authorPicture?: string;
+  title: string;
+  abstract: string;
+  publishingTarget: 'account' | 'channel' | 'community' | 'group';
+  targetName: string;
+  attachmentUrl?: string; // objectURL or dataURL b64
+  attachmentType?: 'pdf' | 'image' | 'video' | 'audio';
+  attachmentName?: string;
+  likes: string[]; // array of userIds
+  dislikes: string[]; // array of userIds
+  createdAt: string;
 }
 
-// Canva Freehand Stroke
-export interface CanvaStroke {
+// Live direct chat message between researchers
+export interface DirectMessage {
   id: string;
-  points: { x: number; y: number }[];
-  color: string;
-  strokeWidth: number;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  timestamp: string;
+}
+
+// Community or academic collaborative group definition
+export interface CommunityGroup {
+  id: string;
+  type: 'community' | 'group' | 'channel';
+  name: string;
+  description: string;
+  creatorId: string;
+  memberIds: string[];
+  createdAt: string;
 }
 
 export interface SocialProfile {
@@ -49,5 +67,16 @@ export interface SocialProfile {
   bio: string;
   role: string;
   whatsappLink?: string;
+  isPremium?: boolean;
   createdAt: string;
+  
+  // Custom enhanced attributes for worldwide scholar networks
+  profilePicture?: string; // base64 or custom graphic url
+  backgroundPicture?: string; // base64 or custom banner url
+  followers: string[]; // array of uids
+  following: string[]; // array of uids
+  friends: string[]; // array of uids who added this user as companion
+  joinedPlatforms: string[]; // e.g., ["Google Scholar", "ResearchGate"]
+  communitiesCreated: string[]; // custom community titles
+  groupsJoined: string[]; // custom group titles
 }

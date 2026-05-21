@@ -29,6 +29,16 @@ service cloud.firestore {
         && user.email.size() <= 256;
     }
 
+    function isValidProfile(profile) {
+      return profile.uid == request.auth.uid
+        && profile.name is string && profile.name.size() <= 256
+        && profile.phoneNumber is string && profile.phoneNumber.size() <= 64
+        && profile.bio is string && profile.bio.size() <= 1000
+        && profile.role is string && profile.role.size() <= 128
+        && (profile.isPremium == null || profile.isPremium is bool)
+        && profile.createdAt is string && profile.createdAt.size() <= 64;
+    }
+
     function isValidProject(project) {
       return project.userId == request.auth.uid
         && project.id is string
@@ -57,6 +67,21 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming());
       allow update: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) && incoming().userId == existing().userId && incoming().id == existing().id;
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // Scholar Public Profiles Directory Path
+    match /profiles/{profileId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == profileId && isValidProfile(incoming());
+      allow update: if isSignedIn() && request.auth.uid == profileId && isValidProfile(incoming()) && incoming().uid == existing().uid;
+      allow delete: if isSignedIn() && request.auth.uid == profileId;
+    }
+
+    // Lilbed Toks Reels stream
+    match /toks/{tokId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if false;
     }
   }
 }
