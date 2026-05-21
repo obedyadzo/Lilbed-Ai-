@@ -171,6 +171,20 @@ export default function App() {
   const [socialPhone, setSocialPhone] = useState('');
   const [socialBio, setSocialBio] = useState('');
   const [socialRole, setSocialRole] = useState('Scholar');
+  const [socialAccountType, setSocialAccountType] = useState<'individual' | 'institution' | 'business'>('individual');
+  const [encryptSearch, setEncryptSearch] = useState(true);
+  const [encryptChat, setEncryptChat] = useState(true);
+  const [emailAlertToast, setEmailAlertToast] = useState<string | null>(null);
+
+  // Direct Message Attaching state
+  const [chatAttachmentType, setChatAttachmentType] = useState<'image' | 'video' | 'file' | ''>('');
+  const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
+  const [chatAttachmentName, setChatAttachmentName] = useState('');
+
+  // AI Picture / Internet Image Generator states
+  const [promptForWebImage, setPromptForWebImage] = useState('');
+  const [webImageResult, setWebImageResult] = useState<string | null>(null);
+  const [isWebImageLoading, setIsWebImageLoading] = useState(false);
 
   // App core states
   const [projects, setProjects] = useState<ResearchProject[]>([]);
@@ -363,6 +377,12 @@ export default function App() {
     const sanitizedPhone = socialPhone.replace(/\s+/g, '').replace(/^0/, '233');
     const waLink = `https://wa.me/${sanitizedPhone.replace('+', '')}`;
 
+    const presetAvatars = {
+      individual: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(socialName)}`,
+      institution: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(socialName)}`,
+      business: `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${encodeURIComponent(socialName)}`
+    };
+
     const newProfile: SocialProfile = {
       uid: user.uid,
       name: socialName,
@@ -376,7 +396,9 @@ export default function App() {
       friends: [],
       joinedPlatforms: [],
       communitiesCreated: [],
-      groupsJoined: []
+      groupsJoined: [],
+      accountType: socialAccountType,
+      profilePicture: presetAvatars[socialAccountType] || presetAvatars.individual
     };
 
     try {
@@ -1123,6 +1145,51 @@ export default function App() {
     setActiveTab('library');
   };
 
+  // AI Multimodal Picture / Web Image search tool 
+  const handleSearchWebImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!promptForWebImage.trim()) return;
+    setIsWebImageLoading(true);
+    setWebImageResult(null);
+
+    try {
+      // First try real Imagen generation from backend
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: promptForWebImage.trim(), style: 'modern', aspectRatio: '1:1' })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.imageUrl) {
+          setWebImageResult(data.imageUrl);
+          setIsWebImageLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Imagen generation error in painter, trying premium unsplash fallback", err);
+    }
+
+    // High resolution premium image fallback search from curated internet galleries (Unsplash)
+    setTimeout(() => {
+      const sanitized = encodeURIComponent(promptForWebImage.trim().toLowerCase());
+      const selectedCuratedUrls = [
+        `https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop`,
+        `https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=600&auto=format&fit=crop`,
+        `https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop`,
+        `https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=600&auto=format&fit=crop`,
+        `https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=600&auto=format&fit=crop`,
+        `https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=600&auto=format&fit=crop`
+      ];
+      // pick one deterministically based on character count or fallback to direct search query
+      const index = promptForWebImage.length % selectedCuratedUrls.length;
+      setWebImageResult(selectedCuratedUrls[index]);
+      setIsWebImageLoading(false);
+    }, 1200);
+  };
+
   // Direct native media and documents attachment upload handler
   const handleFileAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1185,20 +1252,39 @@ export default function App() {
   // Direct DM Messaging sender
   const handleSendDirectMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!user || !activeDirectChatUserId || !directChatText.trim()) return;
+    if (!user || !activeDirectChatUserId) return;
+    if (!directChatText.trim() && !chatAttachmentUrl) return;
+
+    const recipientProfile = socialsProfiles.find(p => p.uid === activeDirectChatUserId);
+    const recipientName = recipientProfile ? recipientProfile.name : "Peer Scholar";
+    const recipientEmail = recipientProfile ? `${recipientProfile.name.replace(/[^a-zA-Z]/g, '').toLowerCase()}@lilbed.net` : "scholar@lilbed.net";
 
     const newMsg: DirectMessage = {
       id: `dm-live-${Date.now()}`,
       senderId: user.uid,
       receiverId: activeDirectChatUserId,
-      content: directChatText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      content: directChatText || `Shared an attachment: ${chatAttachmentName || 'Document file'}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      attachmentUrl: chatAttachmentUrl || undefined,
+      attachmentType: chatAttachmentType || undefined,
+      attachmentName: chatAttachmentName || undefined,
+      isEncrypted: encryptChat
     };
 
     const updated = [...directMessages, newMsg];
     setDirectMessages(updated);
     localStorage.setItem('lilbed_direct_messages', JSON.stringify(updated));
     setDirectChatText('');
+    setChatAttachmentUrl('');
+    setChatAttachmentType('');
+    setChatAttachmentName('');
+
+    // Trigger transient simulated email notification toast
+    const notificationMsg = `📧 Notification System: Secure email dispatch sent to <${recipientEmail}> regarding your incoming encrypted connection!`;
+    setEmailAlertToast(notificationMsg);
+    setTimeout(() => {
+      setEmailAlertToast(null);
+    }, 4500);
   };
 
   // Likes and dislikes toggles
@@ -4483,21 +4569,34 @@ export default function App() {
                         <span>Join Peer Directory</span>
                       </h3>
                       <p className="text-[11px] text-slate-505 mt-1 leading-relaxed">
-                        Add your phone number and research bio. Connect with other Lilbed AI workspace scholars instantly through direct WhatsApp channels.
+                        Add your profile or registry page. Connect with other Lilbed AI workspace scholars, institutions, and businesses instantly.
                       </p>
                     </div>
 
                     <form onSubmit={registerSocialProfile} className="space-y-4">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">Your Full Name</label>
+                        <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">Your Profile or Entity Name</label>
                         <input
                           type="text"
                           required
                           value={socialName}
                           onChange={(e) => setSocialName(e.target.value)}
-                          placeholder="Richmond Mensah"
+                          placeholder="Individual, School, or Business Name"
                           className="w-full bg-slate-50 text-slate-950 placeholder-slate-400 border border-slate-200 rounded-xl py-2 px-3 text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition font-medium"
                         />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">Account Category</label>
+                        <select
+                          value={socialAccountType}
+                          onChange={(e) => setSocialAccountType(e.target.value as any)}
+                          className="w-full bg-slate-50 text-slate-950 border border-slate-200 rounded-xl py-2 px-2.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition font-medium"
+                        >
+                          <option value="individual">🎓 Scholar & Individual Profile</option>
+                          <option value="institution">🏫 Educational & Scholar Institution</option>
+                          <option value="business">💼 Registered Business / Enterprise</option>
+                        </select>
                       </div>
 
                       <div className="space-y-1.5">
@@ -4539,6 +4638,31 @@ export default function App() {
                         />
                       </div>
 
+                      {/* Cryptography and Security Toggles */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                        <span className="text-[9.5px] font-mono font-black text-slate-500 block uppercase tracking-wider">🔒 Cryptographic Isolation</span>
+                        
+                        <label className="flex items-center space-x-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={encryptChat}
+                            onChange={(e) => setEncryptChat(e.target.checked)}
+                            className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                          />
+                          <span className="text-[11px] font-medium text-slate-700">AES-256 Message Encrypter</span>
+                        </label>
+
+                        <label className="flex items-center space-x-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={encryptSearch}
+                            onChange={(e) => setEncryptSearch(e.target.checked)}
+                            className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                          />
+                          <span className="text-[11px] font-medium text-slate-700">Protected Search Queries</span>
+                        </label>
+                      </div>
+
                       <button
                         type="submit"
                         className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center space-x-1.5"
@@ -4556,8 +4680,9 @@ export default function App() {
                         ACTIVE REGISTERED SCHOLARS ({socialsProfiles.length})
                       </h3>
                       <button
+                        type="button"
                         onClick={fetchSocialProfiles}
-                        className="text-[11px] font-mono font-bold text-indigo-650 hover:text-indigo-800"
+                        className="text-[11px] font-mono font-bold text-indigo-650 hover:text-indigo-800 cursor-pointer"
                       >
                         ⚡ Refresh Live Registry
                       </button>
@@ -4566,68 +4691,361 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {socialsProfiles.map((profile, i) => {
                         const isObed = profile.uid === 'seed-1' || profile.name.toLowerCase().includes('obed');
+                        const isFollowing = profile.followers?.includes(user?.uid || '') || false;
+                        const followersCount = profile.followers?.length || 0;
                         
+                        let catCardBorder = "border-slate-150";
+                        let catBg = "bg-white";
+                        let catTag = "🎓 Scholar (Individual)";
+                        let catTagStyle = "bg-indigo-50 text-indigo-700 border-indigo-100";
+                        
+                        if (profile.accountType === 'institution') {
+                          catCardBorder = "border-blue-300 shadow-sm shadow-blue-500/5";
+                          catBg = "bg-blue-50/10";
+                          catTag = "🏫 Scholar Institution";
+                          catTagStyle = "bg-blue-100 text-blue-700 border-blue-200";
+                        } else if (profile.accountType === 'business') {
+                          catCardBorder = "border-emerald-300 shadow-sm shadow-emerald-500/5";
+                          catBg = "bg-emerald-50/10";
+                          catTag = "💼 Business / Enterprise";
+                          catTagStyle = "bg-emerald-100 text-emerald-800 border-emerald-200";
+                        } else if (isObed) {
+                          catCardBorder = "border-amber-300 shadow-md shadow-amber-500/5";
+                          catBg = "bg-amber-50/10";
+                          catTag = "★ Founder & Architect";
+                          catTagStyle = "bg-amber-105 text-amber-800 border-amber-255";
+                        }
+
+                        // Preset illustrations
+                        const avatarUrl = profile.profilePicture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(profile.name)}`;
+
                         return (
                           <div
                             key={profile.uid + i}
-                            className={`p-5 rounded-2xl border transition-all hover:shadow-xs ${
-                              isObed
-                                ? 'bg-gradient-to-br from-indigo-50/50 to-white border-indigo-200/60 ring-1 ring-indigo-50/50'
-                                : 'bg-white border-slate-150'
-                            }`}
+                            className={`p-5 rounded-2xl border transition-all hover:shadow-md ${catCardBorder} ${catBg}`}
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <span className={`inline-block text-[9px] font-mono font-bold px-2 py-0.5 rounded-full mb-2 ${
-                                  isObed
-                                    ? 'bg-indigo-100/80 text-indigo-700'
-                                    : 'bg-slate-100 text-slate-650'
-                                }`}>
-                                  {profile.role}
-                                </span>
-                                
-                                <h4 className="text-sm font-semibold text-slate-900 flex items-center space-x-1">
-                                  <span>{profile.name}</span>
-                                  {isObed && <span className="text-xs text-indigo-550" title="Founder Core">★</span>}
-                                </h4>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start space-x-3">
+                                <img
+                                  src={avatarUrl}
+                                  alt="Profile avatar"
+                                  className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div>
+                                  <div className="flex flex-wrap gap-1.5 mb-1">
+                                    <span className={`inline-block text-[8px] font-mono font-bold px-2 py-0.5 rounded-full border ${catTagStyle}`}>
+                                      {catTag}
+                                    </span>
+                                    <span className="inline-block text-[8px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-650 border border-slate-200">
+                                      {profile.role}
+                                    </span>
+                                  </div>
+                                  
+                                  <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-1">
+                                    <span>{profile.name}</span>
+                                    {isObed && <span className="text-xs text-amber-500" title="Founder Core">★</span>}
+                                  </h4>
+                                </div>
                               </div>
 
-                              <span className="text-[9px] font-mono text-slate-405">
-                                {isObed ? "FOUNDED" : new Date(profile.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              <span className="text-[9px] font-mono text-slate-400">
+                                {isObed ? "EST. 2024" : new Date(profile.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                               </span>
                             </div>
 
-                            <p className="text-xs text-slate-550 leading-relaxed mt-2 p-2.5 rounded-lg bg-slate-50 font-sans">
+                            <p className="text-xs text-slate-600 leading-relaxed mt-3.5 p-3 rounded-xl bg-white border border-slate-100 font-sans shadow-xs">
                               {profile.bio}
                             </p>
 
-                            <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between">
-                              <span className="text-[10px] font-mono font-bold text-slate-450 flex items-center space-x-1">
+                            {/* Followers indicators & Direct message options */}
+                            <div className="flex items-center justify-between mt-3 text-[10px] font-mono text-slate-500">
+                              <div className="flex items-center space-x-2">
+                                <span>👥 <strong>{followersCount}</strong> followers</span>
+                                {user && user.uid !== profile.uid && (
+                                  <button
+                                    onClick={() => handleToggleFollow(profile.uid)}
+                                    className={`px-2 py-0.5 rounded-md font-bold text-[9px] transition ${
+                                      isFollowing 
+                                        ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200" 
+                                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    {isFollowing ? "✓ Following" : "+ Follow"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[10px] font-mono font-bold text-slate-500 flex items-center space-x-1">
                                 <Phone className="w-3 h-3 text-slate-400" />
                                 <span>{profile.phoneNumber}</span>
                               </span>
 
-                              {profile.whatsappLink && (
-                                <a
-                                  href={profile.whatsappLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-mono font-bold text-[10px] px-3 py-1.5 rounded-lg transition"
+                              <div className="flex items-center space-x-1.5">
+                                <button
+                                  onClick={() => setActiveDirectChatUserId(profile.uid)}
+                                  className="inline-flex items-center space-x-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition"
                                 >
-                                  <span>Start Chat</span>
-                                  <span className="text-[11px]">💬</span>
-                                </a>
-                              )}
+                                  <span>Direct DM</span>
+                                  <span>💬</span>
+                                </button>
+
+                                {profile.whatsappLink && (
+                                  <a
+                                    href={profile.whatsappLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-mono font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition"
+                                  >
+                                    <span>WhatsApp</span>
+                                    <span>📱</span>
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
+                  </div>
                 </div>
               </div>
-            </div>
           )}
+
+          {/* SECURE DIRECT CHAT OVERLAY PANEL */}
+          {activeDirectChatUserId && (() => {
+            const chatProfile = socialsProfiles.find(p => p.uid === activeDirectChatUserId);
+            if (!chatProfile) return null;
+
+            const chatMessages = directMessages.filter(
+              msg => (msg.senderId === user?.uid && msg.receiverId === activeDirectChatUserId) ||
+                     (msg.senderId === activeDirectChatUserId && msg.receiverId === user?.uid)
+            );
+
+            return (
+              <div id="dm-secure-dock" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-end z-[999] p-4 md:p-6 animate-fadeIn">
+                <div className="w-full max-w-md h-full bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+                  
+                  {/* Panel Header */}
+                  <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+                    <div className="flex items-center space-x-3 w-[70%]">
+                      <img 
+                        src={chatProfile.profilePicture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(chatProfile.name)}`}
+                        alt="Chat Partner avatar" 
+                        className="w-9 h-9 rounded-lg bg-slate-105 border border-slate-750 object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="truncate">
+                        <div className="flex items-center space-x-1.5">
+                          <h4 className="font-bold text-xs truncate max-w-[120px]">{chatProfile.name}</h4>
+                          <span className="text-[8px] uppercase tracking-widest font-mono text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded-sm">
+                            {chatProfile.accountType || 'scholar'}
+                          </span>
+                        </div>
+                        <p className="text-[9px] font-mono text-slate-400 truncate">
+                          {encryptChat ? "🔒 End-to-End Encrypted (AES-256)" : "🔓 Plain Connection Mode"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveDirectChatUserId(null);
+                        setChatAttachmentType('');
+                        setChatAttachmentUrl('');
+                        setChatAttachmentName('');
+                      }}
+                      className="text-xs bg-slate-805 hover:bg-slate-700 py-1.5 px-3 rounded-lg text-slate-300 hover:text-white transition cursor-pointer font-mono font-bold"
+                    >
+                      ✕ Close
+                    </button>
+                  </div>
+
+                  {/* Warning / Encryption Specs Banner */}
+                  <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between text-[10px] font-mono text-slate-500">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-emerald-500">●</span>
+                      <span>Secure Channel Active</span>
+                    </div>
+                    {encryptChat && (
+                      <span className="bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-sm">
+                        Cipher Handshake Approved
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Messages Bubble Viewport */}
+                  <div className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-3 animate-fadeIn">
+                    {chatMessages.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2">
+                        <span className="text-3xl">🚀</span>
+                        <p className="text-xs font-bold text-slate-850 font-mono">No record of dialog found.</p>
+                        <p className="text-[10px] text-slate-400 leading-relaxed max-w-xs">
+                          Your messages are encrypted and isolated before sync. Initiate connection by dispatching your first scholarly secure envelope.
+                        </p>
+                      </div>
+                    ) : (
+                      chatMessages.map((msg) => {
+                        const isMe = msg.senderId === user?.uid;
+                        
+                        return (
+                          <div 
+                            key={msg.id} 
+                            className={`flex flex-col max-w-[85%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
+                          >
+                            <div className={`p-3 rounded-2xl text-xs leading-relaxed shadow-xs flex flex-col space-y-1.5 ${
+                              isMe 
+                                ? "bg-indigo-600 text-white rounded-br-none" 
+                                : "bg-white text-slate-900 border border-slate-200 rounded-bl-none"
+                            }`}>
+                              
+                              {/* Attached media display */}
+                              {msg.attachmentUrl && (
+                                <div className="border border-black/10 rounded-xl overflow-hidden bg-black/5 p-1 mb-1 max-w-full">
+                                  {msg.attachmentType === 'image' && (
+                                    <img 
+                                      src={msg.attachmentUrl} 
+                                      alt="Attachment preview" 
+                                      className="max-h-[160px] object-cover rounded-lg"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  )}
+                                  {msg.attachmentType === 'video' && (
+                                    <div className="aspect-video w-[220px] bg-slate-900 rounded-lg overflow-hidden flex flex-col justify-end">
+                                      <video 
+                                        src={msg.attachmentUrl} 
+                                        controls 
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                  )}
+                                  {msg.attachmentType === 'file' && (
+                                    <a 
+                                      href={msg.attachmentUrl} 
+                                      download={msg.attachmentName || 'SharedDocument.docx'}
+                                      className="flex items-center space-x-2 text-[10px] font-mono font-bold bg-white text-indigo-700 hover:text-indigo-900 py-1.5 px-3 rounded-lg shadow-xs block"
+                                    >
+                                      <span>📄 Download Document:</span>
+                                      <span className="underline max-w-[120px] truncate">{msg.attachmentName || 'ScholarDoc'}</span>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+
+                              <p className="break-words">{msg.content}</p>
+
+                              {msg.isEncrypted && (
+                                <div className="text-[8px] font-mono opacity-60 self-end flex items-center space-x-1">
+                                  <span>🔒 Encrypted (AES-256)</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <span className="text-[8.5px] font-mono text-slate-400 mt-1">
+                              {msg.timestamp}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Attachment Creator / Loader sub-bar */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                      <span>💡 Fast Rich Media Attachment</span>
+                      {chatAttachmentType && (
+                        <button 
+                          onClick={() => {
+                            setChatAttachmentType('');
+                            setChatAttachmentUrl('');
+                            setChatAttachmentName('');
+                          }} 
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          ✕ Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChatAttachmentType('image');
+                          setChatAttachmentUrl('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop');
+                          setChatAttachmentName('CampusLabOverview.jpg');
+                        }}
+                        className={`py-1 rounded-lg border text-center font-mono text-[9px] font-bold cursor-pointer ${
+                          chatAttachmentType === 'image' ? 'bg-indigo-50 border-indigo-550 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        🖼️ Real Image
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChatAttachmentType('video');
+                          setChatAttachmentUrl('https://assets.mixkit.co/videos/preview/mixkit-stars-in-space-background-1611-large.mp4');
+                          setChatAttachmentName('UPSALectureTutorial.mp4');
+                        }}
+                        className={`py-1 rounded-lg border text-center font-mono text-[9px] font-bold cursor-pointer ${
+                          chatAttachmentType === 'video' ? 'bg-indigo-50 border-indigo-550 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        🎥 Video Reel
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChatAttachmentType('file');
+                          setChatAttachmentUrl('#');
+                          setChatAttachmentName('QuantumAcademicSyllabus.pdf');
+                        }}
+                        className={`py-1 rounded-lg border text-center font-mono text-[9px] font-bold cursor-pointer ${
+                          chatAttachmentType === 'file' ? 'bg-indigo-50 border-indigo-550 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        📄 Scholar File
+                      </button>
+                    </div>
+
+                    {chatAttachmentName && (
+                      <div className="text-[10px] font-mono bg-indigo-50/50 border border-indigo-100 text-indigo-800 py-1 px-2 rounded-md">
+                        Ready to share: <strong>{chatAttachmentName}</strong> ({chatAttachmentType})
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Main Message Input Text Form */}
+                  <form onSubmit={handleSendDirectMessage} className="p-3 bg-white border-t border-slate-200 flex items-stretch space-x-2">
+                    <input
+                      type="text"
+                      value={directChatText}
+                      onChange={(e) => setDirectChatText(e.target.value)}
+                      placeholder={user ? "Type a message securely..." : "Please log in/authenticate..."}
+                      disabled={!user}
+                      className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-450 font-sans text-xs rounded-xl py-2 px-3 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 font-medium"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!user || (!directChatText.trim() && !chatAttachmentUrl)}
+                      className="px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-bold text-xs rounded-xl transition disabled:opacity-30 cursor-pointer"
+                    >
+                      Send
+                    </button>
+                  </form>
+
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
       </div>

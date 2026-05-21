@@ -47,6 +47,10 @@ export interface DirectMessage {
   receiverId: string;
   content: string;
   timestamp: string;
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'video' | 'file';
+  attachmentName?: string;
+  isEncrypted?: boolean;
 }
 
 // Community or academic collaborative group definition
@@ -79,4 +83,5 @@ export interface SocialProfile {
   joinedPlatforms: string[]; // e.g., ["Google Scholar", "ResearchGate"]
   communitiesCreated: string[]; // custom community titles
   groupsJoined: string[]; // custom group titles
+  accountType?: 'individual' | 'institution' | 'business';
 }
