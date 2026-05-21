@@ -37,6 +37,7 @@ export interface PublishedPaper {
   attachmentName?: string;
   likes: string[]; // array of userIds
   dislikes: string[]; // array of userIds
+  isPrivate?: boolean;
   createdAt: string;
 }
 

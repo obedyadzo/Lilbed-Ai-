@@ -477,6 +477,137 @@ app.post("/api/generate-video", async (req, res) => {
   }
 });
 
+// Oxford and Worldwide Dictionary Endpoint
+app.post("/api/dictionary", async (req, res) => {
+  try {
+    const { word } = req.body;
+    if (!word) {
+      res.status(400).json({ error: "Missing word parameter." });
+      return;
+    }
+
+    const systemInstruction = `You are an Oxford English Dictionary and global multilingual linguistic repository.
+Provide definitions of the highest professional linguistic fidelity.
+Return a structured JSON object matching this schema exactly:
+{
+  "word": "the looked up word",
+  "phonetic": "ipa phonetic spelling, e.g., /ɪnˈstəʊ/",
+  "partsOfSpeech": [
+    {
+      "partOfSpeech": "noun | verb | adjective | adverb etc",
+      "definitions": [
+        "First definition of the word",
+        "Second definition if applicable"
+      ],
+      "examples": [
+        "Example sentence using the word"
+      ]
+    }
+  ],
+  "etymology": "Origin of the word, linguistic history, Latin/Greek roots",
+  "globalUsage": "How it is used worldwide, regional variations (e.g., American English vs. British English, Afro-Caribbean usage, West African/Ghanaian expressions, etc.)",
+  "synonyms": ["synonym1", "synonym2", "synonym3"]
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: `Provide detailed Oxford and global linguistic data for the word or phrase: "${word}".`,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        temperature: 0.1,
+      },
+    });
+
+    res.json(JSON.parse(response.text || "{}"));
+  } catch (error: any) {
+    console.error("Dictionary lookup error:", error);
+    res.status(500).json({ error: error?.message || "Failed to retrieve definition." });
+  }
+});
+
+// Code / Barcode / QR / RFID Telemetry Scanner Endpoint
+app.post("/api/scan-code", async (req, res) => {
+  try {
+    const { code, type = "QR" } = req.body;
+    if (!code) {
+      res.status(400).json({ error: "No code or payload data scanned." });
+      return;
+    }
+
+    const systemInstruction = `You are a universal digital telemetry, QR code, and barcode decoder intelligence system.
+Analyze the provided code value or telemetry package and output a comprehensive breakdown of its embedded meaning, identifiers, or technical secrets.
+Return a structured JSON object matching this schema exactly:
+{
+  "type": "QR Code | Barcode | RFID | Academic ISBN | Crypto Signature",
+  "rawPayload": "the provided scan data",
+  "decodedInformation": "A comprehensive detailed description of what this code represents, what actions it triggers, WiFi configuration details, product inventory catalogs, or academic credentials associated with it.",
+  "origin": "Country, standard registry, enterprise, or manufacturer of origin",
+  "securityStatus": "Safe | Suspicious | High-Risk Malware",
+  "parsedDetails": {
+    "specs": "Any extracted variables, server URLs, ISBN metadata, query parameters, or parsed product details"
+  }
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: `Deconstruct and explain this scanned telemetry data: "${code}" of type "${type}".`,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        temperature: 0.1,
+      },
+    });
+
+    res.json(JSON.parse(response.text || "{}"));
+  } catch (error: any) {
+    console.error("Code scan lookup error:", error);
+    res.status(500).json({ error: error?.message || "Failed to decode scanned payload." });
+  }
+});
+
+// Premium Coding Function & App/Web Generator Endpoint
+app.post("/api/generate-code", async (req, res) => {
+  try {
+    const { requirements, language = "TypeScript", projectType = "Web Application" } = req.body;
+    if (!requirements) {
+      res.status(400).json({ error: "Requirements are required to generate assets." });
+      return;
+    }
+
+    const systemInstruction = `You are an elite principal software engineer and website/app development code builder.
+Based on the provided requirements, project type, and target programming language, generate fully production-ready, clean, perfectly styled, and commented code files. Avoid any shorthand or placeholders like '// TODO' or '...'.
+Return a structured JSON object matching this schema:
+{
+  "projectTitle": "Display Title for Generated Project",
+  "language": "Target Language",
+  "architectureSummary": "Short explanation of folders, dependencies, and layout choices.",
+  "files": [
+    {
+      "filePath": "relative/file/path.ext",
+      "content": "The complete source code of the file"
+    }
+  ],
+  "deploymentInstructions": "Clear, direct, and detailed instructions to compile, run, and host the code online."
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: `Design and compile a comprehensive "${projectType}" in "${language}". Requirements: "${requirements}". Output complete, pristine, syntactically correct source files.`,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        temperature: 0.2,
+      },
+    });
+
+    res.json(JSON.parse(response.text || "{}"));
+  } catch (error: any) {
+    console.error("Code synthesis error:", error);
+    res.status(500).json({ error: error?.message || "Failed to generate complete source code." });
+  }
+});
+
 // Vite middleware development vs static production mode
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
